@@ -1,0 +1,31 @@
+{
+  "name": "nix-free-frame",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "sync": "bun run src/sync-cli.ts",
+    "test": "bun test ./tests",
+    "typecheck": "tsc --noEmit",
+    "configure": "bun run scripts/configure.ts",
+    "doctor": "bun run scripts/configure.ts doctor",
+    "verify": "bun run scripts/verify.ts",
+    "jobs": "python3 scripts/install-agents.py",
+    "tools": "python3 scripts/bootstrap-tools.py",
+    "build:android": "python3 scripts/build-android.py",
+    "device": "python3 scripts/device.py",
+    "stage-update": "bun run scripts/stage-update.ts",
+    "audit:public": "python3 scripts/public-export.py",
+    "check": "bun run test && bun run typecheck && python3 -m unittest discover -s scripts -p \"test_*.py\" && python3 tests/public-export.test.py"
+  },
+  "dependencies": {
+    "@marcus5914/google-photos-album-image-url-fetch": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  },
+  "patchedDependencies": {
+    "@marcus5914/google-photos-album-image-url-fetch@1.1.0": "patches/@marcus5914%2Fgoogle-photos-album-image-url-fetch@1.1.0.patch"
+  }
+}

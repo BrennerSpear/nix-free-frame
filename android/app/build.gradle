@@ -1,0 +1,23 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'works.tycho.frame'
+ compileSdk 35
+ signingConfigs {
+  debug {
+   if (System.getenv('FRAME_KEYSTORE_PATH')) storeFile file(System.getenv('FRAME_KEYSTORE_PATH'))
+   storePassword System.getenv('FRAME_KEYSTORE_PASSWORD') ?: 'android'
+   keyAlias System.getenv('FRAME_KEY_ALIAS') ?: 'AndroidDebugKey'
+   keyPassword System.getenv('FRAME_KEY_PASSWORD') ?: 'android'
+  }
+ }
+ defaultConfig {
+  applicationId 'works.tycho.frame'; minSdk 21; targetSdk 35
+  versionCode providers.gradleProperty('frameVersionCode').getOrElse('16').toInteger()
+  versionName providers.gradleProperty('frameVersionName').getOrElse('2.1.0')
+  buildConfigField 'String', 'SERVER_URL', '""'
+  buildConfigField 'String', 'TOKEN', '""'
+ }
+ buildFeatures { buildConfig true }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+dependencies { testImplementation 'junit:junit:4.13.2' }

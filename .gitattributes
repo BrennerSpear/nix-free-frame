@@ -1,0 +1,2 @@
+# Unified patches retain the dependency's original tab-indented context.
+patches/*.patch whitespace=-space-before-tab
