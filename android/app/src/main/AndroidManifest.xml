@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+ <uses-feature android:name="android.hardware.faketouch" android:required="false" />
+ <uses-permission android:name="android.permission.INTERNET" />
+ <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+ <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+ <application android:label="My Photo Frame" android:icon="@drawable/frame_icon" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.NoActionBar">
+  <activity android:name=".FrameActivity" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="true">
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
+  </activity>
+  <receiver android:name=".BootReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>
+  <receiver android:name=".FrameAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+   <meta-data android:name="android.app.device_admin" android:resource="@xml/frame_admin" />
+   <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+  </receiver>
+  <receiver android:name=".OwnerRecoveryReceiver" android:permission="android.permission.DUMP" android:exported="true">
+   <intent-filter><action android:name="works.tycho.frame.CLEAR_OWNER" /></intent-filter>
+  </receiver>
+  <receiver android:name=".UpdateCheckReceiver" android:permission="android.permission.DUMP" android:exported="true">
+   <intent-filter><action android:name="works.tycho.frame.CHECK_UPDATE" /></intent-filter>
+  </receiver>
+  <receiver android:name=".UpdateReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter></receiver>
+  <service android:name=".UpdateService" android:exported="false" />
+ </application>
+</manifest>

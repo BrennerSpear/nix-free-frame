@@ -1,0 +1,60 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 937cf221ef6d72c79e3e5f363a3dd11f4906cd21..a992585797096d448ce2b775142bd1d918075abf 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1047,6 +1047,7 @@ function extractAlbumPageRequest(html) {
+ function getNextPageToken(input) {
+ 	if (!isContainData(input) || !isArray(input.data)) return null;
+ 	const token = input.data[2];
++	if (token != null && typeof token !== "string") throw new Error("Malformed pagination token");
+ 	return typeof token === "string" && token.length > 0 ? token : null;
+ }
+ function parseBatchExecuteResponse(body) {
+@@ -1066,6 +1067,7 @@ function parseBatchExecuteResponse(body) {
+ 		const data = JSON.parse(rpcPayload);
+ 		if (!isArray(data)) return null;
+ 		const token = data[2];
++		if (token != null && typeof token !== "string") throw new Error("Malformed pagination token");
+ 		return {
+ 			data,
+ 			nextPageToken: typeof token === "string" && token.length > 0 ? token : null
+@@ -1129,23 +1131,23 @@ function isVideoEntry(entry) {
+ 	return typeof meta === "object" && meta != null && "76647426" in meta;
+ }
+ function parsePhase3(input) {
+-	if (!isContainData(input)) return null;
++	if (!isContainData(input)) throw new Error("Malformed album media entry");
+ 	const d = input.data;
+-	if (!isArray(d) || d.length < 1) return null;
++	if (!isArray(d) || d.length < 1) throw new Error("Malformed album media entry");
+ 	const arr = d[1];
+-	if (!isArray(arr)) return null;
++	if (!isArray(arr)) throw new Error("Malformed album media entry");
+ 	return arr.map((e) => {
+-		if (!isArray(e) || e.length < 6) return null;
++		if (!isArray(e) || e.length < 6) throw new Error("Malformed album media entry");
+ 		const uid = e[0];
+ 		const imageUpdateDate = e[2];
+ 		const albumAddDate = e[5];
+-		if (typeof uid !== "string" || typeof imageUpdateDate !== "number" || typeof albumAddDate !== "number") return null;
++		if (typeof uid !== "string" || typeof imageUpdateDate !== "number" || typeof albumAddDate !== "number") throw new Error("Malformed album media entry");
+ 		const detail = e[1];
+-		if (!isArray(detail) || detail.length < 3) return null;
++		if (!isArray(detail) || detail.length < 3) throw new Error("Malformed album media entry");
+ 		const url = detail[0];
+ 		const width = detail[1];
+ 		const height = detail[2];
+-		if (typeof url !== "string" || typeof width !== "number" || typeof height !== "number") return null;
++		if (typeof url !== "string" || typeof width !== "number" || typeof height !== "number") throw new Error("Malformed album media entry");
+ 		const isVideo = isVideoEntry(e);
+ 		return {
+ 			uid,
+@@ -1158,7 +1160,7 @@ function parsePhase3(input) {
+ 			imageUpdateDate,
+ 			albumAddDate
+ 		};
+-	}).filter((e) => !(null === e));
++	});
+ }
+ //#endregion
+ //#region src/expected.json
