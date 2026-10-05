@@ -15,3 +15,5 @@ The output must be new and outside this checkout. The exporter refuses findings 
 Open the exported checkout, install frozen dependencies, use `.env.example` for a fresh configure/doctor, bootstrap pinned tools and run host/Android checks. Missing private values should fail clearly. A clean clone cannot reproduce a pre-existing frame's signer or installed proof; supply your own private initial key and capture actual installed baseline. Never borrow somebody else's proof.
 
 License choice is still pending; see [licensing](licensing.md). Public publication is a separate final action, after concrete review and authorization. No public home-service exposure accompanies source sharing.
+
+Only the two approved original setup illustrations at `docs/images/how-it-works.png` and `docs/images/usb-setup.png` are included. They explain topology and connection steps; they are not device evidence or photographs. All other image paths remain excluded by the exporter. Inspect approved illustrations before sharing and never replace them with private screenshots or album photos.

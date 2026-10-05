@@ -14,7 +14,7 @@ class PublicExportTest(unittest.TestCase):
     def test_private_paths_are_never_candidates(self):
         for name in ['runtime/proof.json', '.env', 'spec/recovery.md', 'android/config.properties', 'android/.tools/tool.jar', 'android/app/build/client.apk', 'docs/screenshot.png', 'scripts/id_ed25519.pem', '../src/escape.ts']:
             self.assertFalse(module.public_path(name), name)
-        for name in ['.env.example', 'android/gradle/wrapper/gradle-wrapper.jar', 'src/server.ts', 'docs/how-we-did-it.md']:
+        for name in ['.env.example', 'android/gradle/wrapper/gradle-wrapper.jar', 'src/server.ts', 'docs/how-we-did-it.md', 'docs/images/how-it-works.png', 'docs/images/usb-setup.png']:
             self.assertTrue(module.public_path(name), name)
 
     def test_secret_scan_reports_only_categories(self):

@@ -13,7 +13,9 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_ROOTS = {'src', 'tests', 'scripts', 'android', 'patches', 'docs'}
 PUBLIC_FILES = {'README.md', 'package.json', 'bun.lock', 'tsconfig.json', '.env.example', '.gitignore', '.gitattributes', 'LICENSE', 'NOTICE'}
-GENERATED = {'AGENTS.md': 'Read docs/contributing.md\n', 'CLAUDE.md': 'Read docs/contributing.md\n'}
+GENERATED = {'AGENTS.md': 'Read docs/contributing.md. For frame setup, follow docs/agent-setup.md.\n', 'CLAUDE.md': 'Read docs/contributing.md. For frame setup, follow docs/agent-setup.md.\n'}
+# Approved original illustration only; screenshots and private photos remain excluded.
+PUBLIC_IMAGES = {'docs/images/how-it-works.png', 'docs/images/usb-setup.png'}
 BLOCKED_SUFFIXES = {'.apk', '.keystore', '.jks', '.pem', '.key', '.jpg', '.jpeg', '.png', '.mp4', '.zip'}
 PATTERNS = {
     'private-key': re.compile(rb'-----BEGIN [A-Z ]*PRIVATE KEY-----'),
@@ -32,7 +34,7 @@ def public_path(name):
     path = PurePosixPath(name)
     if path.is_absolute() or '..' in path.parts:
         return False
-    if name in PUBLIC_FILES:
+    if name in PUBLIC_FILES or name in PUBLIC_IMAGES:
         return True
     if not path.parts or path.parts[0] not in PUBLIC_ROOTS:
         return False
