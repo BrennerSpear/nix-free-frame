@@ -57,6 +57,10 @@ public class UpdateService extends Service {
   long checked=state.getLong("checkedElapsed",-60000);
   if(now>=checked&&now-checked<60000)return;
   state.edit().putLong("checkedElapsed",now).apply();
+  try{java.security.KeyPair provisioningKey=DirectConfig.keyPair(getSharedPreferences("directConfig-private",MODE_PRIVATE));HttpURLConnection privateConfig=connection(new URL(base,"direct-config"));
+   privateConfig.setRequestProperty("X-Frame-Config-Key",android.util.Base64.encodeToString(provisioningKey.getPublic().getEncoded(),android.util.Base64.NO_WRAP));
+   try{if(privateConfig.getResponseCode()==200)DirectConfig.apply(getSharedPreferences("directConfig",MODE_PRIVATE),DirectConfig.decrypt(read(privateConfig.getInputStream(),32768),provisioningKey.getPrivate()));}finally{privateConfig.disconnect();}
+  }catch(Exception ignored){} // Optional maintenance failure never blocks updates or offline playback.
   HttpURLConnection manifest=connection(new URL(base,"app-update.json"));
   JSONObject value;
   try{

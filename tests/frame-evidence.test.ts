@@ -9,6 +9,13 @@ test('private evidence rejects arbitrary values and sensitive fields',()=>{
  expect(validateFrameEvidence(evidence)).toEqual(evidence);
  for(const value of [null,[],{...evidence,token:'private'},{...evidence,cacheCount:5001},{...evidence,nightStart:24},{...evidence,resumed:'yes'},{...evidence,apkSha256:'x'},{...evidence,versionCode:0},{...evidence,apkSha256:['a'.repeat(64)]}])expect(()=>validateFrameEvidence(value)).toThrow();
 });
+test('direct evidence carries bounded state and generic failure without capabilities',()=>{
+ const direct={...evidence,mode:'direct',directLastSuccess:1,directLastAttempt:2,directSyncState:'failed',directFailureCode:'sync',directPhotoCount:178,directDatedCount:120,imageChecksPassed:true,directManifestSha256:'d'.repeat(64),configRevision:'fixture-1',syncHour:9,syncMinute:0,syncTimezone:'America/New_York'};
+ expect(validateFrameEvidence(direct)).toEqual(direct);
+ expect(validateFrameEvidence({...direct,directDownloadedCount:1,directAttemptRevision:'fixture-1',directSuccessRevision:'fixture-1'}).directDownloadedCount).toBe(1);
+ for(const value of [{...direct,directDownloadedCount:-1},{...direct,directAttemptRevision:'secret/link',directSuccessRevision:''},{...direct,directAttemptRevision:'fixture-1'}])expect(()=>validateFrameEvidence(value)).toThrow();
+ for(const value of [{...direct,albumUrl:'secret'},{...direct,directFailureCode:'network https://private'},{...direct,configRevision:'secret/link'},{...direct,directLastAttempt:-1},{...direct,syncMinute:60},{...direct,syncTimezone:'Bogus/Zone'}])expect(()=>validateFrameEvidence(value)).toThrow();
+});
 test('receipt authenticates, bounds payload and writes privately without exposing file',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'frame-evidence-'));
  try{

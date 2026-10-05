@@ -1,15 +1,17 @@
 # Nix Free Frame
 
-This Nixplay frame used to depend on Nixplay’s cloud. Now it shows a Google Photos album through a Mac on the same Wi-Fi, with its own local slideshow app. Your Mac refreshes the album daily; the frame keeps a copy so photos continue cycling when the Mac is unavailable. No firmware replacement was needed.
+This Nixplay frame now fetches a Google Photos album over its own Wi-Fi and keeps a local copy for its slideshow. A Mac prepares and installs the software; daily photo fetching runs on the frame. No firmware replacement is needed.
 
-![Google Photos flows through your Mac to the frame over local Wi-Fi](docs/images/how-it-works.png)
+![Google Photos flows directly to the frame over Wi-Fi; a computer handles setup and maintenance](docs/images/how-it-works.png)
 
-This was tested on a [**Nixplay 10.1-inch Smart Digital Photo Frame (W10F)**](https://www.amazon.com/dp/B07V42JLFH), with our tested unit identifying as **W10F-09**, running Android 7.1.2 and rendering at 1280 × 800. Other models and hardware revisions may differ: your mileage may vary. Setup supports an Apple Silicon Mac.
+Tested hardware: [Nixplay 10.1-inch W10F](https://www.amazon.com/dp/B07V42JLFH), specifically **W10F-09**, Android 7.1.2, 1280 × 800. Other revisions may differ. The build/setup tools support an Apple Silicon Mac.
 
 ## Getting started
 
-1. **Connect the frame to your Mac.** Use a data-capable micro-USB cable. On this frame the port is internal, so read [the USB guide](docs/usb-setup.md) first. Unplug power before opening and stop if your assembly differs.
-2. **Choose an album and a host Mac.** Enable link sharing for the Google Photos album, keep that link private, and keep your Mac awake and connected to the frame’s Wi-Fi for daily refreshes. Anyone with the sharing link can view the album.
-3. **Give your coding agent this repository.** Tell it to read [the setup runbook](docs/agent-setup.md) and guide you through installation. It can prepare the software and checks; you handle the cable, device prompts and screen confirmation.
+1. **Connect the frame for initial setup.** The micro-USB port is internal: read [the USB guide](docs/usb-setup.md), unplug power before opening, and stop if your assembly differs.
+2. **Choose an album.** Supply an existing Google Photos sharing link privately. Anyone holding the link can view that album; this software does not enable sharing for you.
+3. **Give your coding agent this repository.** Ask it to follow [the setup runbook](docs/agent-setup.md). You handle the cable, device prompts, and physical screen confirmation.
 
-Setup adds Android build tools, a private photo cache and background sync/server jobs to your Mac, plus the slideshow app to the frame. Original frame apps and recovery backups are retained. Photos crossfade, show dates when known, and dim overnight.
+Photos refresh daily, crossfade every 15 seconds, show capture dates when known, and dim overnight. Failed refreshes retain the last complete slideshow. Original applications, recovery backups, and the previous Mac delivery path remain available.
+
+Google’s shared-page format is undocumented and can change. See [operation and verification limits](docs/android-only.md).

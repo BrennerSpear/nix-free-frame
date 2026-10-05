@@ -17,6 +17,10 @@ public final class CacheStore {
    if(!tmp.renameTo(target))throw new IOException("Cannot publish image");
   } finally { tmp.delete(); }
  }
+ public static void publishImage(File staged,File target,String sha)throws Exception{
+  if(!sha.equals(digest(staged)))throw new IOException("Image checksum mismatch");
+  if(!staged.renameTo(target))throw new IOException("Cannot publish image");
+ }
  public static void publish(File target, byte[] data) throws IOException {
   File tmp=new File(target.getParentFile(),target.getName()+".part");
   try(FileOutputStream out=new FileOutputStream(tmp)){out.write(data);out.getFD().sync();}

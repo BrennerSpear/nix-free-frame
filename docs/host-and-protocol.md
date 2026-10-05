@@ -1,61 +1,54 @@
-# Host setup and frame protocol
+# Operation, maintenance and protocol
 
-Reuse a Nixplay W10F-09 as a local Android photo frame. A macOS host downloads a Google Photos link-shared album, validates and caches JPEGs, and serves them privately over your LAN. A native Android HOME app caches those photos and cycles independently of the host. Firmware and original applications stay recoverable.
+The frame can fetch its link-shared Google Photos album directly and play a private local cache. A computer still builds/signs updates and supplies initial provisioning and optional maintenance. The existing Mac cache/server/jobs remain available for rollback; do not retire them automatically.
 
-Tested hardware: **W10F-09, Android 7.1.2 / API 25, armeabi-v7a**, rendered at 1280 × 800. Other revisions are unverified. This host implementation requires macOS: it uses `sips`, `lockf`, and user LaunchAgents. Bun and Python 3.9+ run the host workflows; the pinned build bootstrap supports Apple Silicon macOS; Android builds use pinned JDK 17, Gradle 8.9, AGP 8.7.3 and SDK 35. There is no Linux-host support claim.
+## Existing deployment migration
 
-Read [how the frame was converted](how-we-did-it.md) before opening hardware. [Android behavior and recovery](../android/README.md), [public export](public-sharing.md), and [licensing/provenance](licensing.md) explain the relevant boundaries. Original installation evidence is kept separately in the private local repository and is excluded from public exports.
-
-## Host setup
+Read each CLI’s help first. Preserve the private `.env`, signing key, installed APK/proof and a pre-update frame receipt. Build a strictly newer same-signer APK using `scripts/build-android.py --checks`, validate it for API25, then stage through the existing own-package OTA path:
 
 ```sh
-bun install --frozen-lockfile
-bun run scripts/configure.ts configure
-bun run scripts/configure.ts doctor
-bun run sync
-bun start
+bun run scripts/stage-update.ts --apk PATH --baseline-apk PATH --installed-proof PATH
 ```
 
-`configure` creates a mode-600 ignored `.env` from [.env.example](../.env.example). Edit its placeholders locally. `ALBUM_URL` and `FRAME_TOKEN` are private. The example binds loopback; set `BIND_ADDRESS` to the host's private LAN address and `FRAME_SERVER_URL` to the matching origin before configuring a frame. Do not bind all interfaces, forward router ports, or expose this service publicly. This project neither enables Google sharing nor changes album contents. Anyone with an album sharing link can view it: [Google's sharing guidance](https://support.google.com/photos/answer/9789702).
-
-For an existing deployment, `bun run scripts/configure.ts migrate` backs up legacy configuration and writes `.env`, preserving private values. After successfully writing `.env` and restrictive backups, migration immediately retires the active legacy files. Run doctor, a real sync and live service checks next; the rollback copies remain private. `rollback` restores configuration backups; it does not roll back code, LaunchAgents or APKs by itself. Keep signing keystores, private keys, photos, original APKs and installed proofs in ignored files referenced by `.env`.
-
-After a first successful sync and authenticated foreground service checks, stop the temporary `bun start` process before installing the server LaunchAgent so both servers do not compete for the port. Then install or update the host jobs:
+The live maintenance server must run the current code before provisioning direct mode. Restart only this project’s server when authorized; retain its normal service configuration and rollback. Do not start competing servers on the same port.
 
 ```sh
-python3 scripts/install-agents.py
-python3 scripts/install-agents.py --status
-# Existing project jobs only:
-python3 scripts/install-agents.py --update
+bun run scripts/direct-config.ts --help
+bun run scripts/direct-config.ts direct
+# Explicit rollback, when wanted:
+bun run scripts/direct-config.ts host
 ```
 
-Daily `SYNC_HOUR`/`SYNC_MINUTE` follow the **host's local timezone** through launchd. `NIGHT_TIMEZONE` controls the frame's separate night schedule. Jobs run only while the user host/session is available; they cannot guarantee a powered-off host sync. `--remove` and `--rollback` manage this project's jobs. Inspect each command's `--help` before device work. [The conversion guide](how-we-did-it.md) lists the USB, signing, SSH and recovery sequence.
+These commands read secrets from mode-600 `.env`, accept no secret arguments, and atomically stage an ignored private configuration. Direct staging uses `ALBUM_URL`, `SYNC_HOUR`, `SYNC_MINUTE`, `NIGHT_TIMEZONE`, and `SLIDESHOW_INTERVAL_SECONDS`. Defaults are 09:00, America/New_York, and 15 seconds. Staging a new revision requests a new sync; it does not prove successful import or fetching.
 
-## Photos and failure behavior
+Keep relative paths rooted correctly when building in a separate checkout. Use an ignored private config with absolute tool/key/runtime references where needed. Never publish the original private repository history.
 
-The bearer-authenticated `/manifest.json` contains stable IDs, image hashes, dimensions, a slideshow interval and optional `capturedMonth`. Photos are fetched through server-relative `/photos/<hash>.jpg` paths. Unknown dates stay blank; dates come only from valid JPEG EXIF capture metadata, without timezone conversion. The app fits photos against black, shows a date briefly, crossfades for 600 ms and caches a last good slideshow. Defaults are 15 seconds per image and black/minimum-window-brightness night mode from 22:00–08:00 in the configured timezone. The panel stays powered.
+## Configuration transport
 
-Enumeration and every image validation must succeed before an atomic manifest change. Failed/empty/unreadable albums retain the prior cache. Videos are skipped. The host limits each download to 20 MB and 30 seconds, the whole sync to 20 minutes, and converts images with `sips` to JPEGs up to 1920 pixels. Kernel locking prevents concurrent syncs. `/health` and `/status` require bearer authentication; config, source URLs and arbitrary paths are never served. HTTP on a trusted LAN does not encrypt photo traffic.
+The fixed bearer-authenticated `/direct-config` route reads only its dedicated mode-600 file and returns an RSA-OAEP-wrapped random AES-256-GCM envelope. The device’s RSA private key stays in its private app data. The request supplies its public key in a header; no secret album URL appears in a request URL. Missing configuration returns 404. This is explicit provisioning, not automatic opt-in from host settings.
 
-Google's Library API now reads albums/media created by the calling app, rather than arbitrary existing albums. The pinned extractor reads the link-shared page and an undocumented pagination endpoint. Google can change these at any time; a passing local test does not guarantee future compatibility. The output is a display cache, not an original-quality backup. [Google API changes](https://developers.google.com/photos/support/updates), [extractor source](https://github.com/vikas5914/google-photos-album-image-url-fetch).
+The established maintenance connection uses HTTP on a trusted LAN. Encryption prevents a passive observer from directly reading the configuration response, but the bearer token and recipient header do not provide protection from an active LAN attacker. Do not expose the server publicly, forward router ports, or describe this as authenticated end-to-end TLS.
 
-## Updates and access
+## Direct photo protocol and limits
 
-The app checks a private same-origin update manifest and verifies the package, installed signing certificate, exact size/hash, Android compatibility and strictly newer version before installation. Preserve the original signing key for all updates. Device Owner enables silent own-package installation; the administrator policy list is empty, but the Android role is broader than installation permission. Without that role, the app reports a permission failure. No arbitrary package, command or URL endpoint exists.
+Google requests use HTTPS, normal certificate verification, and no login, cookies or OAuth. Album pages allow only `photos.google.com` and `photos.app.goo.gl`; image hosts must match `lh` plus digits under `googleusercontent.com`. Every GET redirect is revalidated; at most five redirects are followed. RPC POSTs never redirect.
 
-`bun run scripts/stage-update.ts --apk PATH --baseline-apk PATH --installed-proof PATH` publishes a checked candidate atomically. Baseline/proof must represent an actually verified installed version; staging and server status alone do not prove installation. Read back the installed package/hash and inspect foreground playback, cache/night settings and SSH afterward.
+The restricted data-only parser reads embedded AF_initDataCallback metadata and private `snAcKc` pagination without executing JavaScript. It deduplicates IDs, rejects malformed/repeated continuation tokens, caps enumeration at 100 pages/10,000 items, and the sync accepts at most 5,000 media entries. Videos are skipped. Empty or incomplete enumeration fails the whole refresh.
 
-Optional SSH uses official F-Droid Termux, dedicated keys and USB-pinned host keys on port 8022. A remote laptop reaches the frame through an existing Tailscale-connected macOS host using OpenSSH ProxyJump. Termux sessions have its app sandbox privileges. Tailscale stays on the host because [the current Android client requires Android 8+](https://tailscale.com/docs/install/android). No network ADB or public ports are needed.
+Limits include 8 MiB metadata responses, 32 MiB per image, 15-second connection/read timeouts, a 90-second transfer deadline, a five-minute pagination deadline and a 30-minute sync budget checked between images. A final network operation can extend a loop deadline by its bounded request timeout. Sequential images request `=w1920-h1920`; sampled native decoding bounds decoded sides to 2560 pixels. Cache accounting caps retained direct JPEGs at 1 GiB and requires 96 MiB free before downloads. Parser nesting/node limits and native out-of-memory handling bound common failure modes.
 
-## Verification
+A full enumeration and all verified image processing precede publication. Normalized image bytes are synced, image names persisted, then the manifest is atomically replaced and its directory synced before old files are removed. Host/direct caches remain separate. Interrupted or failed work preserves the prior manifest; this is a display cache, not an original-quality backup.
+
+## Verification and retained services
 
 ```sh
 bun run check
-python3 tests/public-export.test.py
-bun run scripts/verify.ts
-python3 scripts/public-export.py
+python3 scripts/build-android.py --checks
+bun run scripts/verify.ts --expect-version NUMBER --apk PATH --expect-mode direct --previous-receipt PATH
 ```
 
-`bun run scripts/verify.ts` reads live authenticated host health and a recent private frame receipt. `--expect-version NUMBER --apk PATH` requires a fresh exact installed APK hash, retained roles and matching cache count; optional `--previous-receipt PATH` compares saved settings/manifest hashes. Save a private pre-update receipt before staging if you want that retention gate. Receipts expose only bounded state/hashes and do not replace visible panel inspection or trusted USB package readback.
+The verifier requires fresh installed-hash/role evidence, successful direct mode for the current configuration revision and current native fixture results. Native fixtures include full cache-transaction failure/corruption/cancellation cases with exact last-good byte comparisons. Compare retained presentation settings, direct photo/date counts and actual installed APK hash; verify both intended SSH routes. Receipts contain bounded counts, hashes and fixed failure codes, not album links or photo IDs.
 
-Backend tests cover authentication, routes, real image validation, atomic updates and last-good retention. Android unit/lint/build checks validate the client; physical inspection is still needed for USB access, visible panel behavior, persistence across reboot and recovery. The public audit scans both current export candidates and reachable original Git history without printing secret values. Public sharing uses a separate fresh-history checkout; never publish the original history directly. License selection and publication remain explicit final decisions.
+For a host-independence test, make only this project’s photo delivery unavailable while keeping maintenance/update access and rollback intact; require a fresh direct sync to succeed. Test malformed/failed fetching against the retained manifest and restore intended private configuration afterward. Host-delivery denial is distinct from disabling frame Wi-Fi. Physical Wi-Fi-offline playback, cold-power recovery and day/night panel appearance require explicit observations; do not infer them from successful HTTP or unit checks.
+
+Legacy host setup, USB installation and recovery remain in [the agent runbook](agent-setup.md) and [conversion history](how-we-did-it.md). Host jobs must stay in place until retirement is explicitly authorized.

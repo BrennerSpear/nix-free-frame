@@ -16,7 +16,7 @@ final class FrameEvidence {
  private static final java.util.concurrent.ExecutorService worker=Executors.newSingleThreadExecutor();
  static void report(FrameActivity activity, boolean night) {
   try {
-   SharedPreferences settings=activity.getPreferences(0);
+   SharedPreferences settings=activity.getPreferences(0),directConfig=activity.getSharedPreferences("directConfig",Context.MODE_PRIVATE);
    final String endpoint=settings.getString("server",BuildConfig.SERVER_URL), token=settings.getString("token",BuildConfig.TOKEN);
    if(token.isEmpty())return;
    JSONObject value=new JSONObject();
@@ -31,10 +31,21 @@ final class FrameEvidence {
    value.put("termuxExempt",android.os.Build.VERSION.SDK_INT>=23&&((PowerManager)activity.getSystemService(Context.POWER_SERVICE)).isIgnoringBatteryOptimizations("com.termux"));
    value.put("nightEnabled",settings.getBoolean("nightEnabled",true));
    value.put("nightStart",settings.getInt("nightStart",22));value.put("nightEnd",settings.getInt("nightEnd",8));value.put("nightActive",night);
-   File photos=new File(activity.getFilesDir(),"photos");int count=0;File[] files=photos.listFiles();
+   File directManifest=new File(activity.getFilesDir(),"direct-photos/manifest.json");
+   File photos=activity.activeCacheDirectory();int count=0;File[] files=photos.listFiles();
    if(files!=null)for(File file:files)if(file.getName().matches("[a-f0-9]{64}\\.jpg")&&file.isFile())count++;
    value.put("cacheCount",count);
+   SharedPreferences direct=activity.getSharedPreferences("directSync",Context.MODE_PRIVATE);
+   value.put("mode",directConfig.getString("photoMode","host"));value.put("configRevision",directConfig.getString("configRevision",""));
+   value.put("directLastSuccess",direct.getLong("success",0));value.put("directLastAttempt",direct.getLong("attempt",0));
+   value.put("directAttemptRevision",direct.getString("attemptRevision",""));value.put("directSuccessRevision",direct.getString("successRevision",""));
+   value.put("directSyncState",direct.getString("state","idle"));value.put("directFailureCode",direct.getString("failureCode",""));value.put("directPhotoCount",direct.getInt("photoCount",0));
+   value.put("imageChecksPassed",direct.getBoolean("imageChecksPassed",false)&&direct.getInt("imageChecksVersion",0)==BuildConfig.VERSION_CODE);
+   value.put("directDownloadedCount",direct.getInt("downloadedCount",0));
+   value.put("directDatedCount",direct.getInt("datedCount",0));
+   value.put("syncHour",directConfig.getInt("syncHour",9));value.put("syncMinute",directConfig.getInt("syncMinute",0));value.put("syncTimezone",directConfig.getString("syncTimezone","America/New_York"));
    value.put("manifestSha256",hash(new File(photos,"manifest.json")));
+   value.put("directManifestSha256",directManifest.isFile()?hash(directManifest):hex(MessageDigest.getInstance("SHA-256").digest(new byte[0])));
    value.put("apkSha256",hash(new File(activity.getApplicationInfo().sourceDir)));
    value.put("settingsSha256",hash(new File(activity.getApplicationInfo().dataDir,"shared_prefs/FrameActivity.xml")));
    final byte[] bytes=value.toString().getBytes("UTF-8");

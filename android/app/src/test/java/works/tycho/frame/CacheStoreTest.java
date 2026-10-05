@@ -15,4 +15,18 @@ public class CacheStoreTest {
   Files.write(source.toPath(),"new".getBytes()); CacheStore.verifiedCopy(new FileInputStream(source),target,CacheStore.digest(source));
   assertEquals("new",new String(Files.readAllBytes(target.toPath())));
  }
+ @Test public void corruptImageRepairedBeforeManifestSwap() throws Exception {
+  File dir=Files.createTempDirectory("frame-transaction").toFile(),staged=new File(dir,"staged"),image=new File(dir,"image.jpg"),manifest=new File(dir,"manifest.json");
+  Files.write(staged.toPath(),"good".getBytes());Files.write(image.toPath(),"corrupt".getBytes());CacheStore.publish(manifest,"old manifest".getBytes());
+  CacheStore.publishImage(staged,image,CacheStore.digest(staged));
+  assertEquals("good",new String(Files.readAllBytes(image.toPath())));
+  assertEquals("old manifest",new String(Files.readAllBytes(manifest.toPath())));
+  CacheStore.publish(manifest,"new manifest".getBytes());assertEquals("new manifest",new String(Files.readAllBytes(manifest.toPath())));
+ }
+ @Test public void invalidStagedImageCannotReplaceLastGood() throws Exception {
+  File dir=Files.createTempDirectory("frame-transaction").toFile(),staged=new File(dir,"staged"),image=new File(dir,"image.jpg"),manifest=new File(dir,"manifest.json");
+  Files.write(staged.toPath(),"partial".getBytes());Files.write(image.toPath(),"good".getBytes());CacheStore.publish(manifest,"old manifest".getBytes());
+  try{CacheStore.publishImage(staged,image,"invalid");fail();}catch(IOException expected){}
+  assertEquals("good",new String(Files.readAllBytes(image.toPath())));assertEquals("old manifest",new String(Files.readAllBytes(manifest.toPath())));
+ }
 }

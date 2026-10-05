@@ -1,43 +1,37 @@
 # Agent setup runbook
 
-Read this repository's [contributing instructions](contributing.md) first, then [the conversion and recovery guide](how-we-did-it.md), [host configuration and protocol](host-and-protocol.md), [Android behavior](../android/README.md), [licensing/provenance](licensing.md) and [public-sharing boundaries](public-sharing.md). This is an orchestration entrypoint for the existing tools, not a separate skill or a promise that every physical step is automated. Read each CLI's help before use.
+Read [contributing instructions](contributing.md), [conversion/recovery](how-we-did-it.md), [operation/protocol](host-and-protocol.md), [Android behavior](../android/README.md), [licensing](licensing.md) and [public-sharing boundaries](public-sharing.md). Read each tool’s help before use.
 
-## Establish the installation and authority
+## Establish current state
 
-Determine whether this is a new frame installation or an existing working one. Identify the Mac that will remain awake on the frame's Wi-Fi and the computer physically connected to USB; they can differ. Host services use macOS facilities and the pinned build bootstrap supports Apple Silicon macOS. Require Bun and Python 3.9+. Keep the repository in a stable local path: the background jobs refer to that checkout.
+Identify the exact frame and whether this is a new installation or an existing working deployment. Tested target: W10F-09, Android7.1.2/API25/ARM32. Build tooling supports Apple Silicon macOS. Inspect actual installed/staged versions, signing identity, host health, latest receipt, retained caches/settings and intended SSH routes. Historical proofs are not fresh state.
 
-Identify the frame’s private LAN address using its network settings, the router device list or trusted USB network readback; match it to the selected physical device rather than guessing from an open port. Do not enable TCP ADB for discovery.
+Get the chosen existing Google Photos sharing link privately. Explain that anyone holding it can view the album. Do not enable sharing, modify album contents, change router settings or switch providers implicitly. A computer prepares/signs/provisions software; daily direct photo delivery subsequently runs on the frame.
 
-Ask the user to supply a chosen Google Photos sharing link privately and to enable sharing themselves if necessary. Do not enable sharing, change photos, accept vendor terms, expose a service or change router/Tailscale settings implicitly. Explain that setup stores a photo cache, private configuration, signing identity and recovery evidence on the Mac; it installs user LaunchAgents for the server and daily sync, and installs/configures an Android HOME app on the frame. Optional Device Owner and Termux SSH have separate authority and recovery boundaries. Confirm those optional capabilities are wanted before provisioning them.
+## New installation
 
-## Prepare the host without touching the frame
+Use frozen dependencies and `scripts/configure.ts configure`; edit mode-600 `.env` locally and run doctor. Use migration only for an existing legacy configuration after preserving its rollback copies. Preserve existing keys and proofs. Bootstrap pinned tools; SDK terms require the user’s own acceptance. Generate a signing key only for a genuinely new installation.
 
-Install dependencies from the frozen lockfile. For new setup, use `scripts/configure.ts configure`, edit the resulting ignored mode-600 `.env` privately, and run its doctor. Use `migrate` only for a real legacy deployment after inspecting existing sources and preserving its values. Successful migration immediately retires active legacy files after writing `.env` and restrictive rollback backups; validate the new configuration and live service afterward. Never replace an existing signing identity or live recovery evidence with fresh examples.
+Follow [USB setup](usb-setup.md). Require the selected authorized USB device in normal boot, perform the complete private backup, then use the documented device/install/configuration sequence. Keep original applications and data recoverable. Device Owner and optional Termux SSH each require their own understood authority boundary. Do not wipe accounts, flash firmware, root the device or enable network ADB to bypass prerequisites.
 
-Resolve `ALBUM_URL`, token, LAN bind address/port, matching frame server origin, runtime path, schedule and timezone from `.env.example`. The example starts on loopback; choose the actual private LAN interface before the frame connects. Do not merge divergent shell environment settings, echo secrets, embed tokens in an APK or include them in URLs. Sync first and verify an authenticated server response before installing/updating scheduled jobs. If using `bun start` for that foreground check, stop it before installing the server LaunchAgent to avoid a port conflict. The daily launchd schedule uses the host's local timezone; night mode uses its own configured timezone.
+Initial private server/token configuration still uses the existing USB import. Configure a private LAN maintenance origin, run the current server, then provision direct mode as below. Build tools and initial provisioning are not on-device operations.
 
-Follow [host setup](host-and-protocol.md#host-setup) for commands and rollback. Keep the Mac available for syncs and downloads; cached frame playback continues when it is not. Google shared-page extraction is undocumented and can fail; retain the last good cache rather than publishing an empty or partial album.
+## Existing frame: direct migration
 
-## Build, select USB target and preserve recovery
+1. Save a private pre-update receipt and preserve the actually installed APK/proof, signing key and host cache/jobs.
+2. Run repository checks and build a strictly newer same-signer APK with unit/lint checks. Verify API25 package/signature compatibility and scan decoded APK/upload candidates for actual private values.
+3. Stage via `scripts/stage-update.ts` using the real installed baseline. Prefer ordinary signed OTA over unnecessary USB changes. Require an actual installed APK hash and a fresh resumed/HOME/owner receipt.
+4. Ensure the project’s maintenance server supports `/direct-config`. Run `scripts/direct-config.ts direct` using the existing private `.env`; never pass secrets in arguments. It stages an encrypted private configuration with a fresh revision.
+5. Wait for import and successful direct enumeration/download/publication. Check direct count, dates, current-version native fixtures, preserved presentation settings and both SSH routes. Generic failure codes require diagnosis; do not report a running or staged refresh as success.
+6. Demonstrate a fresh successful direct sync with this project’s host photo endpoints unavailable. Preserve maintenance/update access and restore normal host service afterward. Test failed refresh retention, then restore the intended album revision and verify success again.
+7. Obtain physical confirmation of visible cycling/day/night behavior. A cold-power boot and true Wi-Fi-disconnected playback are separate checks; mark them unverified until observed. Do not claim these from a host endpoint-denial test.
 
-Use `scripts/bootstrap-tools.py` for pinned verified downloads. SDK terms require the user's own acceptance. For a new installation only, set signing passwords/alias and use `scripts/create-signing-key.py --new-installation`. Preserve the key privately for every future update. Build with `scripts/build-android.py --checks`; runtime token/server configuration is imported separately.
+Direct and host preferences/caches are separate. `scripts/direct-config.ts host` stages a reversible return to host delivery without erasing its retained settings/cache. Keep the host jobs, recovery backups, original firmware and signing identity until retirement is concretely authorized.
 
-Have the user read [the illustrated USB guide](usb-setup.md) and [detailed access notes](how-we-did-it.md#accessing-the-internal-usb), disconnect power before opening, attach a data-capable cable and handle any authorization prompt. Discover devices and explicitly select the actual USB serial in `.env` or the command. Require normal boot, authorized USB transport and the tested model/API/ABI. Do not auto-select ambiguous hardware or try firmware flashing, root, network ADB, account wipes or resets to bypass a failed gate.
+## Optional access and recovery
 
-Use `scripts/device.py doctor` and `backup` before installation. Preserve original HOME, package enabled states, Backup Manager state and original APKs in restrictive ignored files. A partial backup is not sufficient. Follow [the setup sequence](how-we-did-it.md#reproducible-setup-sequence): install, import `.env` settings with `android/configure-usb.py`, select HOME, inspect the screen and allow persistence waits before reboot. Original apps/data stay installed. Do not automatically disable original packages unless their exact original states were recorded and the custom launcher has demonstrated working playback.
+The existing fixed Termux startup bridge remains unchanged: official signer pin, scoped RUN_COMMAND and a fixed local managed script only. Termux SSH has its app sandbox privileges. Use pinned host keys and existing Mini/laptop routes; do not assume SSH can read the frame app’s private files or grant Android shell authority.
 
-## Optional updates and SSH
+For owner removal, follow the tested two-step sequence: clear only this app’s owner/admin role using the protected receiver, then restore the captured original Backup Manager setting. Restore original launcher/package states exactly and allow persistence waits. Full vendor restoration remains a separate unverified end-to-end procedure on a retained deployment.
 
-For silent own-package updates, inspect Device Owner prerequisites and explain the broader Android role. Assign only when authorized; never wipe accounts to satisfy prerequisites. Record original backup state. Recovery must clear only this app's owner/admin role and restore the captured backup setting, not an assumed value.
-
-If remote access is wanted, follow [SSH topology and firmware observations](how-we-did-it.md#ssh-and-firmware-observations). Install verified matching F-Droid Termux/Boot; initial Termux bootstrap and first launch are manual. Run the tracked provisioning script inside Termux with USB-supplied public keys. Obtain the host key through trusted USB, populate the private known-hosts file and use `scripts/ssh-client.py install`/`verify` for targeted client blocks. Preserve unrelated SSH entries. A laptop can use an already working Tailscale host as ProxyJump; do not install unsupported Tailscale on the frame or configure public ports. Termux is an app sandbox, not root or Android shell.
-
-Grant only the frame's scoped RUN_COMMAND permission and Termux exemption, allow the documented 45-second persistence wait, and verify real reboot startup. This firmware suppressed Termux:Boot; the narrowly fixed bridge is the tested startup path. Retain the duplicate-daemon guard. For ordinary changes to an existing frame, prefer a newer same-signer Wi-Fi update over unnecessary USB mutation.
-
-## Verify and report the actual result
-
-Run host unit/type checks, Python workflow/export checks and Android unit/lint/build checks. Follow [verification commands](host-and-protocol.md#verification). Capture a private pre-update receipt if comparing retained settings/manifest hashes; stage only an authorized candidate against a real installed APK baseline/proof. Require a fresh installed APK hash/version receipt and retained state, not merely a staged manifest or downloaded status.
-
-Inspect foreground slideshow, cache/night settings, HOME/owner/permissions and each intended SSH route. Ask the user to confirm the physical panel on its original power adapter with USB disconnected; screenshots alone are not that confirmation. Distinguish completed automated checks, user confirmations and unverified physical steps. Do not claim full vendor restoration was tested: the documented complete reverse sequence remains unverified on the retained deployment.
-
-For failure or retirement, follow [recovery](how-we-did-it.md#recovery-and-troubleshooting), preserve last-good cache and private backups, and restore only captured original state. Configuration, jobs and APK rollback are separate operations. Run the public-safety audit before sharing source, preserve licensing notices and never publish original private history or runtime artifacts. Publishing or changing repository visibility remains an explicit final action.
+Run the public-safety audit before sharing source. Keep configuration, photos, keys, private proofs and original history outside distributable files. Record implementation/live evidence in the designated private log; publication does not authorize changing repository visibility or merging a PR.

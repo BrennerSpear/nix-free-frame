@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { capturedMonthFromJpeg } from './captured-month';
 import { appUpdateRequest } from './app-updates';
 import {frameEvidenceRequest} from './frame-evidence';
+import {directConfigRequest} from './direct-config';
 
 export {runtime, readConfig, type Config} from './config';
 import {runtime, type Config} from './config';
@@ -96,6 +97,7 @@ export async function syncAlbum(config: Config, dir = runtime, deps: {
 }
 export async function handleRequest(request:Request, dir=runtime, token=""):Promise<Response>{
   if (!token || request.headers.get('authorization') !== `Bearer ${token}`) return new Response('Unauthorized', {status:401});
+  const directConfig=await directConfigRequest(request,dir);if(directConfig)return directConfig;
   const evidence=await frameEvidenceRequest(request,dir);if(evidence)return evidence;
   const updateResponse=await appUpdateRequest(request,dir);if(updateResponse)return updateResponse;
   if(request.method!=='GET' && request.method!=='HEAD') return new Response('Method not allowed',{status:405});

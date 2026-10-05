@@ -1,4 +1,18 @@
-# Removing the Mac host: Android-only research
+# Direct Android operation
+
+The native app implements direct shared-album fetching, sampled image normalization, transactional local caching, and calendar-based daily scheduling. The computer remains useful for building/signing software, initial provisioning and optional maintenance. The prior host mode, its separate cache/settings, and recovery path are retained.
+
+See [the operation/protocol reference](host-and-protocol.md), [Android behavior](../android/README.md) and [agent runbook](agent-setup.md) for current commands, limits, trust boundaries and verification gates. Google’s embedded metadata and pagination remain undocumented interfaces that can change.
+
+## Verification boundary
+
+Use fresh installed-APK and frame-receipt evidence for the deployed version. Native synthetic fixtures exercise JPEG EXIF capture dates and all eight orientations on the actual frame. The complete direct-sync cache transaction also receives injected download/enumeration failures, an empty result, cached-image corruption and a configuration cancellation; checks require exact retained manifest/image bytes and cleanup of new staged files. These fixtures do not simulate destructive power loss. A successful refresh while host photo delivery is denied proves that refresh did not use the Mac photo cache. It does not prove Wi-Fi-disconnected operation, physical day/night appearance or recovery after a cold-power boot. Those physical checks remain unverified until separately confirmed. Do not disable or remove the previous host jobs automatically.
+
+## Research provenance
+
+The following assessment records the read-only investigation preceding implementation. Its feasibility language describes that earlier point in time; it is preserved for source provenance and alternatives, not as the current deployment status.
+
+# Historical feasibility research (2026-10-04)
 
 Researched 2026-10-04. Read-only investigation; no application, service, sharing, authentication or device changes. This is a feasibility assessment, not a tested Android implementation.
 

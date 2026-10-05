@@ -20,6 +20,8 @@ public class FrameActivity extends Activity {
  private final List<File> photos=new ArrayList<>();
  private ImageView image, alternate; private TextView status, dateLabel; private View nightCover; private File directory; private int index=0, interval=15;
  private boolean active=false, syncing=false, night=false;
+ private static final java.util.concurrent.atomic.AtomicBoolean syncLock=new java.util.concurrent.atomic.AtomicBoolean();
+ private String observedRevision="";
  private Bitmap shown, retiring;
  private int generation=0;
  private Boolean preview=null;
@@ -28,13 +30,13 @@ public class FrameActivity extends Activity {
  private final Runnable fadeDate=()->dateLabel.animate().alpha(0f).setDuration(500).start();
  private final Runnable endWake=()->updateNight();
  private final Runnable clearPreview=()->{preview=null;previewUntil=0;updateNight();};
- private final Runnable nightTick=new Runnable(){public void run(){if(active){updateNight();main.postDelayed(this,60000);}}};
+ private final Runnable nightTick=new Runnable(){public void run(){if(active){updateNight();FrameEvidence.report(FrameActivity.this,night);main.postDelayed(this,60000);}}};
  private final Runnable cycle=new Runnable(){public void run(){if(active&&!night){showNext();main.postDelayed(this,interval*1000L);}}};
- private final Runnable refresh=new Runnable(){public void run(){if(active){sync();main.postDelayed(this,24*60*60*1000L);}}};
+ private final Runnable refresh=new Runnable(){public void run(){if(active){scheduledSync();main.postDelayed(this,60000);}}};
  private final Runnable checkUpdate=new Runnable(){public void run(){if(active){startService(new Intent(FrameActivity.this,UpdateService.class));main.postDelayed(this,60000);}}};
  public void onCreate(Bundle state){
   super.onCreate(state); getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-  directory=new File(getFilesDir(),"photos");directory.mkdirs();
+  directory=playbackDirectory();directory.mkdirs();
   FrameLayout layout=new FrameLayout(this);layout.setBackgroundColor(Color.BLACK);
   image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);layout.addView(image,new FrameLayout.LayoutParams(-1,-1));
   alternate=new ImageView(this);alternate.setScaleType(ImageView.ScaleType.FIT_CENTER);alternate.setAlpha(0f);layout.addView(alternate,new FrameLayout.LayoutParams(-1,-1));
@@ -103,21 +105,33 @@ public class FrameActivity extends Activity {
  private String token(){return getPreferences(0).getString("token",BuildConfig.TOKEN);}
  private void configure(){
   LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(24,12,24,12);
+  CheckBox direct=new CheckBox(this);direct.setText("Fetch album directly on frame");direct.setChecked("direct".equals(getSharedPreferences("directConfig",0).getString("photoMode","host")));direct.setEnabled(!getSharedPreferences("directConfig",0).getString("albumUrl","").isEmpty());box.addView(direct);
   EditText url=new EditText(this);url.setSingleLine();url.setHint("Photo server URL");url.setText(server());box.addView(url);
   EditText secret=new EditText(this);secret.setSingleLine();secret.setHint("Access token");secret.setInputType(129);secret.setText(token());box.addView(secret);
   CheckBox nightEnabled=new CheckBox(this);nightEnabled.setText("Night mode · "+getPreferences(0).getString("nightTimezone","America/New_York"));nightEnabled.setChecked(getPreferences(0).getBoolean("nightEnabled",true));box.addView(nightEnabled);
   TextView startCaption=new TextView(this);startCaption.setText("Dim at");box.addView(startCaption);Spinner startHour=hours(getPreferences(0).getInt("nightStart",22));box.addView(startHour);
   TextView endCaption=new TextView(this);endCaption.setText("Resume at");box.addView(endCaption);Spinner endHour=hours(getPreferences(0).getInt("nightEnd",8));box.addView(endHour);
   ScrollView scroll=new ScrollView(this);scroll.addView(box);
-  new AlertDialog.Builder(this).setTitle("Photo frame settings").setView(scroll).setPositiveButton("Save",(d,w)->{getPreferences(0).edit().putString("server",url.getText().toString().trim()).putString("token",secret.getText().toString().trim()).putBoolean("nightEnabled",nightEnabled.isChecked()).putInt("nightStart",startHour.getSelectedItemPosition()).putInt("nightEnd",endHour.getSelectedItemPosition()).apply();updateNight();sync();}).setNegativeButton("Cancel",null).show();
+  new AlertDialog.Builder(this).setTitle("Photo frame settings").setView(scroll).setPositiveButton("Save",(d,w)->{getSharedPreferences("directConfig",0).edit().putString("photoMode",direct.isChecked()?"direct":"host").apply();getPreferences(0).edit().putString("server",url.getText().toString().trim()).putString("token",secret.getText().toString().trim()).putBoolean("nightEnabled",nightEnabled.isChecked()).putInt("nightStart",startHour.getSelectedItemPosition()).putInt("nightEnd",endHour.getSelectedItemPosition()).apply();updateNight();sync();}).setNegativeButton("Cancel",null).show();
  }
  private Spinner hours(int selected){
   List<String> labels=new ArrayList<>();for(int hour=0;hour<24;hour++)labels.add((hour%12==0?12:hour%12)+(hour<12?" AM":" PM"));
   Spinner spinner=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,labels);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);spinner.setAdapter(adapter);spinner.setSelection(Math.max(0,Math.min(23,selected)));return spinner;
  }
- private byte[] read(File file)throws Exception{try(InputStream in=new FileInputStream(file)){return readBytes(in,1024*1024);}}
+ private byte[] read(File file)throws Exception{try(InputStream in=new FileInputStream(file)){return readBytes(in,4*1024*1024);}}
  private byte[] readBytes(InputStream in,int limit)throws Exception{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)throw new IOException("Response too large");out.write(b,0,n);}return out.toByteArray();}
- private void loadCache(){try{applyManifest(new JSONObject(new String(read(new File(directory,"manifest.json")),"UTF-8")));}catch(Exception e){status.setText("Photo library not connected");}}
+ File activeCacheDirectory(){return directory;}
+ private File playbackDirectory(){
+  File direct=new File(getFilesDir(),"direct-photos");
+  return "direct".equals(getSharedPreferences("directConfig",0).getString("photoMode","host"))&&new File(direct,"manifest.json").isFile()?direct:new File(getFilesDir(),"photos");
+ }
+ private void loadCache(){
+  try{applyManifest(new JSONObject(new String(read(new File(directory,"manifest.json")),"UTF-8")));}
+  catch(Exception e){
+   if("direct-photos".equals(directory.getName())){directory=new File(getFilesDir(),"photos");try{applyManifest(new JSONObject(new String(read(new File(directory,"manifest.json")),"UTF-8")));return;}catch(Exception ignored){}}
+   status.setText("Photo library not connected");
+  }
+ }
  private void applyManifest(JSONObject manifest)throws Exception{
   JSONArray list=manifest.getJSONArray("photos");List<File> next=new ArrayList<>();Map<String,String> nextMonths=new HashMap<>();
   for(int n=0;n<list.length();n++){String sha=list.getJSONObject(n).getString("sha256");if(!sha.matches("[a-f0-9]{64}"))throw new IOException("Invalid hash");File f=new File(directory,sha+".jpg");if(f.isFile()){next.add(f);nextMonths.put(f.getName(),PresentationPolicy.monthLabel(list.getJSONObject(n).optString("capturedMonth", "")));}}
@@ -127,8 +141,38 @@ public class FrameActivity extends Activity {
   if(!url.getProtocol().equals(base.getProtocol())||!url.getHost().equals(base.getHost())||url.getPort()!=base.getPort())throw new IOException("Photo URL must use same server");
   HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(10000);c.setReadTimeout(30000);c.setRequestProperty("Authorization","Bearer "+access);if(c.getResponseCode()!=200){c.disconnect();throw new IOException("Server request failed");}return c;
  }
+ private void scheduledSync(){
+  if(syncing||syncLock.get())return;
+  String revision=getSharedPreferences("directConfig",0).getString("configRevision","");boolean changed=!revision.equals(observedRevision);observedRevision=revision;
+  File selected=playbackDirectory();if(!selected.equals(directory)){directory=selected;loadCache();}
+  if("direct".equals(getSharedPreferences("directConfig",0).getString("photoMode","host"))){
+   android.content.SharedPreferences state=getSharedPreferences("directSync",0);long now=System.currentTimeMillis();
+   if(!revision.equals(state.getString("attemptRevision",""))||DirectSchedule.due(now,revision.equals(state.getString("successRevision",""))?state.getLong("success",0):0,state.getLong("attempt",0),state.getInt("failures",0),getSharedPreferences("directConfig",0).getInt("syncHour",9),getSharedPreferences("directConfig",0).getInt("syncMinute",0),getSharedPreferences("directConfig",0).getString("syncTimezone","America/New_York")))sync();
+  }else if(changed||System.currentTimeMillis()-getSharedPreferences("directSync",0).getLong("hostAttempt",0)>=24*60*60*1000L)sync();
+ }
+ private void syncDirect(){
+  if(photos.isEmpty())status.setText("Loading photo library");
+  final android.content.SharedPreferences config=getSharedPreferences("directConfig",0),state=getSharedPreferences("directSync",0);
+  final File directDirectory=new File(getFilesDir(),"direct-photos");directDirectory.mkdirs();
+  final String album=config.getString("albumUrl",""),revision=config.getString("configRevision","");final int seconds=config.getInt("directInterval",15);
+  state.edit().putLong("attempt",System.currentTimeMillis()).putString("attemptRevision",revision).putString("state","running").putString("failureCode","").putInt("downloadedCount",0).commit();
+  if(active)FrameEvidence.report(this,night);
+  worker.execute(()->{try{
+   if(BuildConfig.DEBUG&&state.getInt("imageChecksVersion",0)!=BuildConfig.VERSION_CODE){
+    state.edit().putBoolean("imageChecksPassed",false).commit();NativeImageChecks.run(getCacheDir());state.edit().putBoolean("imageChecksPassed",true).putInt("imageChecksVersion",BuildConfig.VERSION_CODE).commit();
+   }
+   JSONObject manifest=DirectAlbumSync.run(directDirectory,album,seconds,()->revision.equals(config.getString("configRevision",""))&&"direct".equals(config.getString("photoMode","host")),count->state.edit().putInt("downloadedCount",count).apply());
+   int dated=0;JSONArray directPhotos=manifest.getJSONArray("photos");for(int i=0;i<directPhotos.length();i++)if(!directPhotos.getJSONObject(i).optString("capturedMonth","").isEmpty())dated++;
+   state.edit().putInt("datedCount",dated).putLong("success",System.currentTimeMillis()).putString("successRevision",revision).putString("state","success").putString("failureCode","").putInt("failures",0).putInt("photoCount",manifest.getJSONArray("photos").length()).commit();
+   main.post(()->{if(!isDestroyed()&&!isFinishing())try{directory=playbackDirectory();loadCache();showNext();}catch(Exception ignored){}});
+  }catch(Exception e){state.edit().putString("state","failed").putString("failureCode",e instanceof DirectAlbumSync.Failure?((DirectAlbumSync.Failure)e).code:"sync").putInt("failures",Math.min(16,state.getInt("failures",0)+1)).commit();}
+  finally{syncLock.set(false);main.post(()->{syncing=false;if(!isDestroyed()&&!isFinishing()){if(photos.isEmpty())status.setText("Waiting for your photo library");if(active)FrameEvidence.report(this,night);}});}});
+ }
  private void sync(){
-  if(syncing)return;syncing=true;if(photos.isEmpty())status.setText("Loading photo library");final String endpoint=server(), access=token();
+  if(syncing||!syncLock.compareAndSet(false,true))return;syncing=true;
+  if("direct".equals(getSharedPreferences("directConfig",0).getString("photoMode","host"))){syncDirect();return;}
+  directory=new File(getFilesDir(),"photos");directory.mkdirs();loadCache();
+  getSharedPreferences("directSync",0).edit().putLong("hostAttempt",System.currentTimeMillis()).apply();if(photos.isEmpty())status.setText("Loading photo library");final String endpoint=server(), access=token(),hostRevision=getSharedPreferences("directConfig",0).getString("configRevision","");
   worker.execute(()->{try{
    URL base=new URL(endpoint.endsWith("/")?endpoint:endpoint+"/");HttpURLConnection c=connect(new URL(base,"manifest.json"),base,access);byte[] bytes;
    try(InputStream in=c.getInputStream()){bytes=readBytes(in,1024*1024);}finally{c.disconnect();}
@@ -141,11 +185,12 @@ public class FrameActivity extends Activity {
     }
     BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;BitmapFactory.decodeFile(target.getPath(),bounds);if(bounds.outWidth<=0)throw new IOException("Invalid photo");
    }
+   if(!hostRevision.equals(getSharedPreferences("directConfig",0).getString("configRevision",""))||!"host".equals(getSharedPreferences("directConfig",0).getString("photoMode","host")))throw new IOException("Configuration changed");
    CacheStore.publish(new File(directory,"manifest.json"),bytes);
    // Delete only after the complete replacement manifest was published.
    Set<String> keep=new HashSet<>();for(int n=0;n<list.length();n++)keep.add(list.getJSONObject(n).getString("sha256")+".jpg");File[] files=directory.listFiles();if(files!=null)for(File f:files)if(f.getName().endsWith(".jpg")&&!keep.contains(f.getName()))f.delete();
    main.post(()->{if(!isFinishing()&&!isDestroyed())try{applyManifest(manifest);showNext();if(active)FrameEvidence.report(this,night);}catch(Exception ignored){}});
-  }catch(Exception e){main.post(()->{if(photos.isEmpty())status.setText("Waiting for your photo library");if(active){main.removeCallbacks(refresh);main.postDelayed(refresh,5*60*1000L);}});}finally{main.post(()->syncing=false);}});
+  }catch(Exception e){main.post(()->{if(photos.isEmpty())status.setText("Waiting for your photo library");getSharedPreferences("directSync",0).edit().putLong("hostAttempt",System.currentTimeMillis()-24*60*60*1000L+5*60*1000L).apply();});}finally{syncLock.set(false);main.post(()->syncing=false);}});
  }
  private void showNext(){
   if(!active||night||photos.isEmpty()||decoding)return;File file=photos.get(index++%photos.size());String month=photoMonths.get(file.getName());final int requestGeneration=generation;decoding=true;
