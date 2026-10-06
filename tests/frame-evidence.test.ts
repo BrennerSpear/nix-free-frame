@@ -28,3 +28,10 @@ test('receipt authenticates, bounds payload and writes privately without exposin
   expect((await handleRequest(new Request('http://localhost/frame-status.json',{headers:{authorization:'Bearer test'}}),dir,'test')).status).toBe(404);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('power evidence preserves unknown values and rejects partial or arbitrary diagnostic fields',()=>{
+ const power={powerInteractive:false,powerWakeVerified:false,powerForceLockGranted:false,powerKeyguardSecure:false,powerNightOffEnabled:true,powerDisplayState:'off',powerNextWakeAt:1,powerLastSleepAt:0,powerLastWakeAt:0,powerWakeCount:0,powerPresentationCount:0,powerScreenTimeout:-1,powerStayOnPlugged:-1,powerSleepCode:'missing_policy'};
+ const verification={verificationId:'fixture-request',verificationAction:'wifi_cycle',verificationState:'started',verificationCode:'none',verificationStartedAt:1,verificationCompletedAt:0,verificationWifiState:'unknown',verificationRestoreAt:2,verificationWifiOffAt:0,verificationWifiOnAt:0,verificationOfflinePresentations:0,verificationOfflineBacklight:-1};
+ expect(validateFrameEvidence({...evidence,...power,...verification}).powerScreenTimeout).toBe(-1);
+ for(const value of [{...evidence,powerInteractive:false},{...evidence,...power,powerSleepCode:'secret/url'},{...evidence,...power,powerStayOnPlugged:8},{...evidence,...power,...verification,verificationAction:'shell'},{...evidence,...power,...verification,verificationId:'secret/url'},{...evidence,...power,...verification,verificationStartedAt:-1}])expect(()=>validateFrameEvidence(value)).toThrow();
+});

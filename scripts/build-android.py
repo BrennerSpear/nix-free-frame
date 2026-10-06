@@ -3,8 +3,8 @@
 import argparse, os, subprocess
 from env_config import load_env, resolve_path, ROOT
 p=argparse.ArgumentParser()
-p.add_argument('--version-code',type=int,default=15)
-p.add_argument('--version-name',default='2.0.5')
+p.add_argument('--version-code',type=int,default=16)
+p.add_argument('--version-name',default='2.1.0')
 p.add_argument('--checks',action='store_true',help='Also run unit tests and lint')
 a=p.parse_args()
 if a.version_code<1: p.error('version-code must be positive')

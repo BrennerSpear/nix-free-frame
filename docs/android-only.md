@@ -4,6 +4,12 @@ The native app implements direct shared-album fetching, sampled image normalizat
 
 See [the operation/protocol reference](host-and-protocol.md), [Android behavior](../android/README.md) and [agent runbook](agent-setup.md) for current commands, limits, trust boundaries and verification gates. Google’s embedded metadata and pagination remain undocumented interfaces that can change.
 
+## Overnight behavior
+
+The 2.1.0/code 16 implementation adds true display sleep without replacing Android 7.1.2 or the vendor firmware. It arms a local-calendar morning wake using `setExactAndAllowWhileIdle` before calling `lockNow()`. Sleep is gated by a successful wake probe, a nonsecure keyguard and the `force-lock` grant. Missing prerequisites retain the black-screen fallback. API25 does not let Device Owner bypass an empty admin policy declaration: the app now requests only `force-lock`, and the installed grant may require confirmation through **Allow display sleep** on the frame. [Android details](../android/README.md#overnight-display-sleep).
+
+Morning wake restores HOME and daily sync catch-up. Boot/time changes rebuild the schedule; a separate maintenance alarm continues while the foreground timer is paused. The optional private DEBUG verification actions cover alarm delivery, a short sleep/wake, temporary day playback, timed Wi-Fi disconnection/restoration and an ordinary owner-initiated reboot. Their actions and durations are fixed, and Wi-Fi recovery is armed and persisted before disconnecting. These mechanisms require fresh device evidence; this section does not claim they have passed on the deployed frame.
+
 ## Verification boundary
 
 Use fresh installed-APK and frame-receipt evidence for the deployed version. Native synthetic fixtures exercise JPEG EXIF capture dates and all eight orientations on the actual frame. The complete direct-sync cache transaction also receives injected download/enumeration failures, an empty result, cached-image corruption and a configuration cancellation; checks require exact retained manifest/image bytes and cleanup of new staged files. These fixtures do not simulate destructive power loss. A successful refresh while host photo delivery is denied proves that refresh did not use the Mac photo cache. It does not prove Wi-Fi-disconnected operation, physical day/night appearance or recovery after a cold-power boot. Those physical checks remain unverified until separately confirmed. Do not disable or remove the previous host jobs automatically.

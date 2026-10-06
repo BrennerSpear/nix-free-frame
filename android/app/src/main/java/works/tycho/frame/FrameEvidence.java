@@ -14,15 +14,17 @@ import java.util.concurrent.Executors;
 /** Optional private verification receipt. No settings values, paths, photos or commands leave the app. */
 final class FrameEvidence {
  private static final java.util.concurrent.ExecutorService worker=Executors.newSingleThreadExecutor();
- static void report(FrameActivity activity, boolean night) {
+ static void report(FrameActivity activity, boolean night) {report(activity,night,FrameActivity.isResumedForEvidence());}
+ static void report(Context context){report(context,ScreenPowerController.night(context),FrameActivity.isResumedForEvidence());}
+ private static void report(Context activity,boolean night,boolean resumed) {
   try {
-   SharedPreferences settings=activity.getPreferences(0),directConfig=activity.getSharedPreferences("directConfig",Context.MODE_PRIVATE);
+   SharedPreferences settings=activity.getSharedPreferences("FrameActivity",Context.MODE_PRIVATE),directConfig=activity.getSharedPreferences("directConfig",Context.MODE_PRIVATE);
    final String endpoint=settings.getString("server",BuildConfig.SERVER_URL), token=settings.getString("token",BuildConfig.TOKEN);
    if(token.isEmpty())return;
    JSONObject value=new JSONObject();
    PackageManager pm=activity.getPackageManager();
    value.put("versionCode",pm.getPackageInfo(activity.getPackageName(),0).versionCode);
-   value.put("resumed",true);
+   value.put("resumed",resumed);
    Intent home=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
    ResolveInfo resolved=pm.resolveActivity(home,PackageManager.MATCH_DEFAULT_ONLY);
    value.put("home",resolved!=null&&resolved.activityInfo!=null&&activity.getPackageName().equals(resolved.activityInfo.packageName));
@@ -32,7 +34,7 @@ final class FrameEvidence {
    value.put("nightEnabled",settings.getBoolean("nightEnabled",true));
    value.put("nightStart",settings.getInt("nightStart",22));value.put("nightEnd",settings.getInt("nightEnd",8));value.put("nightActive",night);
    File directManifest=new File(activity.getFilesDir(),"direct-photos/manifest.json");
-   File photos=activity.activeCacheDirectory();int count=0;File[] files=photos.listFiles();
+   File photos=activity instanceof FrameActivity?((FrameActivity)activity).activeCacheDirectory():new File(activity.getFilesDir(),"direct".equals(directConfig.getString("photoMode","host"))&&directManifest.isFile()?"direct-photos":"photos");int count=0;File[] files=photos.listFiles();
    if(files!=null)for(File file:files)if(file.getName().matches("[a-f0-9]{64}\\.jpg")&&file.isFile())count++;
    value.put("cacheCount",count);
    SharedPreferences direct=activity.getSharedPreferences("directSync",Context.MODE_PRIVATE);
@@ -48,6 +50,8 @@ final class FrameEvidence {
    value.put("directManifestSha256",directManifest.isFile()?hash(directManifest):hex(MessageDigest.getInstance("SHA-256").digest(new byte[0])));
    value.put("apkSha256",hash(new File(activity.getApplicationInfo().sourceDir)));
    value.put("settingsSha256",hash(new File(activity.getApplicationInfo().dataDir,"shared_prefs/FrameActivity.xml")));
+   ScreenPowerController.addEvidence(activity,value);
+   VerificationController.addEvidence(activity,value);
    final byte[] bytes=value.toString().getBytes("UTF-8");
    worker.execute(()->{
     HttpURLConnection connection=null;

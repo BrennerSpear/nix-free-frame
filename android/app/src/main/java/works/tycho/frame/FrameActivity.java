@@ -20,6 +20,8 @@ public class FrameActivity extends Activity {
  private final List<File> photos=new ArrayList<>();
  private ImageView image, alternate; private TextView status, dateLabel; private View nightCover; private File directory; private int index=0, interval=15;
  private boolean active=false, syncing=false, night=false;
+ private static volatile boolean resumedForEvidence;
+ static boolean isResumedForEvidence(){return resumedForEvidence;}
  private static final java.util.concurrent.atomic.AtomicBoolean syncLock=new java.util.concurrent.atomic.AtomicBoolean();
  private String observedRevision="";
  private Bitmap shown, retiring;
@@ -48,8 +50,8 @@ public class FrameActivity extends Activity {
   nightCover.setOnClickListener(v->{wakeBriefly();});status.setOnClickListener(v->configure());
   importPrivateConfig();loadCache();readPreview(getIntent());FrameSsh.start(this);
  }
- public void onResume(){super.onResume();active=true;getWindow().getDecorView().setSystemUiVisibility(5894);updateNight();if(wakeUntil>SystemClock.elapsedRealtime())main.postDelayed(endWake,wakeUntil-SystemClock.elapsedRealtime());main.removeCallbacks(cycle);if(!night)main.post(cycle);main.post(nightTick);main.post(refresh);main.post(checkUpdate);FrameEvidence.report(this,night);}
- public void onPause(){active=false;main.removeCallbacks(cycle);main.removeCallbacks(refresh);main.removeCallbacks(nightTick);main.removeCallbacks(checkUpdate);main.removeCallbacks(endWake);hideDate();finishTransition();super.onPause();}
+ public void onResume(){super.onResume();active=true;resumedForEvidence=true;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(!ScreenPowerController.secure(this))getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);getWindow().getDecorView().setSystemUiVisibility(5894);updateNight();if(wakeUntil>SystemClock.elapsedRealtime())main.postDelayed(endWake,wakeUntil-SystemClock.elapsedRealtime());main.removeCallbacks(cycle);if(!night)main.post(cycle);main.post(nightTick);main.post(refresh);main.post(checkUpdate);FrameEvidence.report(this,night);}
+ public void onPause(){active=false;resumedForEvidence=false;main.removeCallbacks(cycle);main.removeCallbacks(refresh);main.removeCallbacks(nightTick);main.removeCallbacks(checkUpdate);main.removeCallbacks(endWake);hideDate();finishTransition();super.onPause();}
  public void onDestroy(){generation++;decoder.shutdownNow();main.removeCallbacksAndMessages(null);hideDate();finishTransition();image.setImageDrawable(null);alternate.setImageDrawable(null);if(shown!=null){shown.recycle();shown=null;}super.onDestroy();}
  protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);readPreview(intent);updateNight();if(intent.hasExtra("previewIndex"))showNext();}
  public boolean onKeyUp(int key, android.view.KeyEvent event){
@@ -69,12 +71,13 @@ public class FrameActivity extends Activity {
  private void updateNight(){
   long now=SystemClock.elapsedRealtime();if(preview!=null&&now>=previewUntil)preview=null;
   boolean next=preview!=null?preview:PresentationPolicy.isNight(System.currentTimeMillis(),getPreferences(0).getBoolean("nightEnabled",true),getPreferences(0).getInt("nightStart",22),getPreferences(0).getInt("nightEnd",8),getPreferences(0).getString("nightTimezone","America/New_York"));
-  if(now<wakeUntil)next=false;
+  if(now<wakeUntil||ScreenPowerController.temporaryDay(this))next=false;
   boolean changed=next!=night;if(changed){night=next;generation++;hideDate();finishTransition();}
   WindowManager.LayoutParams attrs=getWindow().getAttributes();attrs.screenBrightness=night?0.01f:WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;getWindow().setAttributes(attrs);
   nightCover.setVisibility(night?View.VISIBLE:View.GONE);image.setVisibility(night?View.INVISIBLE:View.VISIBLE);alternate.setVisibility(night?View.INVISIBLE:View.VISIBLE);
   status.setVisibility(night||!photos.isEmpty()?View.GONE:View.VISIBLE);
   if(changed){main.removeCallbacks(cycle);if(active&&!night)main.post(cycle);}
+  if(active)ScreenPowerController.reconcile(this,night);
  }
  private void hideDate(){main.removeCallbacks(fadeDate);dateLabel.animate().cancel();dateLabel.setAlpha(0f);dateLabel.setText("");}
  private void finishTransition(){
@@ -82,6 +85,7 @@ public class FrameActivity extends Activity {
   if(retiring!=null){retiring.recycle();retiring=null;}
  }
  private void present(Bitmap bitmap,String month){
+  android.content.SharedPreferences power=ScreenPowerController.state(this);power.edit().putLong("presentationCount",power.getLong("presentationCount",0)+1).apply();
   finishTransition();hideDate();
   ImageView previous=image;image=alternate;alternate=previous;
   retiring=shown;shown=bitmap;image.setImageBitmap(bitmap);image.setAlpha(retiring==null?1f:0f);
@@ -106,13 +110,20 @@ public class FrameActivity extends Activity {
  private void configure(){
   LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(24,12,24,12);
   CheckBox direct=new CheckBox(this);direct.setText("Fetch album directly on frame");direct.setChecked("direct".equals(getSharedPreferences("directConfig",0).getString("photoMode","host")));direct.setEnabled(!getSharedPreferences("directConfig",0).getString("albumUrl","").isEmpty());box.addView(direct);
+  CheckBox panelOff=new CheckBox(this);panelOff.setText("Turn the display off at night");panelOff.setChecked(ScreenPowerController.enabled(this));box.addView(panelOff);
+  String sleepRequirement=ScreenPowerController.secure(this)?"Display sleep is blocked by a secure screen lock. Remove it on the frame before enabling unattended display sleep.":!ScreenPowerController.state(this).getBoolean("wakeVerified",false)?"Display sleep is waiting for a successful wake-alarm check. Until then, night mode keeps a black screen.":!ScreenPowerController.granted(this)?"Display sleep needs screen-lock permission below.":"Display sleep is ready. The morning wake alarm is scheduled before the screen turns off.";
+  TextView sleepStatus=new TextView(this);sleepStatus.setText(sleepRequirement);box.addView(sleepStatus);
+  if(!ScreenPowerController.granted(this)){
+   TextView explanation=new TextView(this);explanation.setText("Allow screen locking to turn the display off at night. Until allowed, night mode keeps a black screen. Morning wake is scheduled before display sleep.");box.addView(explanation);
+   Button allow=new Button(this);allow.setText("Allow display sleep");allow.setOnClickListener(v->{Intent request=new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN,new ComponentName(this,FrameAdminReceiver.class)).putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,"Turn this frame's display off at night; wake is scheduled automatically for morning.");try{startActivity(request);}catch(ActivityNotFoundException e){Toast.makeText(this,"Screen-lock permission setup is unavailable",Toast.LENGTH_LONG).show();}});box.addView(allow);
+  }
   EditText url=new EditText(this);url.setSingleLine();url.setHint("Photo server URL");url.setText(server());box.addView(url);
   EditText secret=new EditText(this);secret.setSingleLine();secret.setHint("Access token");secret.setInputType(129);secret.setText(token());box.addView(secret);
   CheckBox nightEnabled=new CheckBox(this);nightEnabled.setText("Night mode · "+getPreferences(0).getString("nightTimezone","America/New_York"));nightEnabled.setChecked(getPreferences(0).getBoolean("nightEnabled",true));box.addView(nightEnabled);
   TextView startCaption=new TextView(this);startCaption.setText("Dim at");box.addView(startCaption);Spinner startHour=hours(getPreferences(0).getInt("nightStart",22));box.addView(startHour);
   TextView endCaption=new TextView(this);endCaption.setText("Resume at");box.addView(endCaption);Spinner endHour=hours(getPreferences(0).getInt("nightEnd",8));box.addView(endHour);
   ScrollView scroll=new ScrollView(this);scroll.addView(box);
-  new AlertDialog.Builder(this).setTitle("Photo frame settings").setView(scroll).setPositiveButton("Save",(d,w)->{getSharedPreferences("directConfig",0).edit().putString("photoMode",direct.isChecked()?"direct":"host").apply();getPreferences(0).edit().putString("server",url.getText().toString().trim()).putString("token",secret.getText().toString().trim()).putBoolean("nightEnabled",nightEnabled.isChecked()).putInt("nightStart",startHour.getSelectedItemPosition()).putInt("nightEnd",endHour.getSelectedItemPosition()).apply();updateNight();sync();}).setNegativeButton("Cancel",null).show();
+  new AlertDialog.Builder(this).setTitle("Photo frame settings").setView(scroll).setPositiveButton("Save",(d,w)->{ScreenPowerController.state(this).edit().putBoolean("nightOffEnabled",panelOff.isChecked()).apply();getSharedPreferences("directConfig",0).edit().putString("photoMode",direct.isChecked()?"direct":"host").apply();getPreferences(0).edit().putString("server",url.getText().toString().trim()).putString("token",secret.getText().toString().trim()).putBoolean("nightEnabled",nightEnabled.isChecked()).putInt("nightStart",startHour.getSelectedItemPosition()).putInt("nightEnd",endHour.getSelectedItemPosition()).apply();updateNight();sync();}).setNegativeButton("Cancel",null).show();
  }
  private Spinner hours(int selected){
   List<String> labels=new ArrayList<>();for(int hour=0;hour<24;hour++)labels.add((hour%12==0?12:hour%12)+(hour<12?" AM":" PM"));

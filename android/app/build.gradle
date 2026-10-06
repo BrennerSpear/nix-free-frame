@@ -12,8 +12,8 @@ android {
  }
  defaultConfig {
   applicationId 'works.tycho.frame'; minSdk 21; targetSdk 35
-  versionCode providers.gradleProperty('frameVersionCode').getOrElse('15').toInteger()
-  versionName providers.gradleProperty('frameVersionName').getOrElse('2.0.5')
+  versionCode providers.gradleProperty('frameVersionCode').getOrElse('16').toInteger()
+  versionName providers.gradleProperty('frameVersionName').getOrElse('2.1.0')
   buildConfigField 'String', 'SERVER_URL', '""'
   buildConfigField 'String', 'TOKEN', '""'
  }

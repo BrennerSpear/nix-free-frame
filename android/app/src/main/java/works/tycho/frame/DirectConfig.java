@@ -30,6 +30,11 @@ final class DirectConfig {
   int hour=value.optInt("syncHour",9),minute=value.optInt("syncMinute",0),interval=value.optInt("intervalSeconds",15);
   String zone=value.optString("syncTimezone","America/New_York");
   if(hour<0||hour>23||minute<0||minute>59||interval<5||interval>3600||!PresentationPolicy.validTimezone(zone))throw new IOException("Invalid configuration");
+  if(value.has("verification")){
+   JSONObject task=value.getJSONObject("verification");
+   if(task.length()!=3||task.getInt("version")!=1||!VerificationPolicy.valid(task.getString("id"),task.getString("action")))throw new IOException("Invalid verification request");
+   if(!prefs.edit().putString("verificationId",task.getString("id")).putString("verificationAction",task.getString("action")).commit())throw new IOException("Cannot save verification request");
+  }
   if(revision.equals(prefs.getString("configRevision","")))return false;
   if(!prefs.edit().putString("photoMode",mode).putString("albumUrl",album).putString("configRevision",revision).putInt("syncHour",hour).putInt("syncMinute",minute).putString("syncTimezone",zone).putInt("directInterval",interval).commit())throw new IOException("Cannot save configuration");
   return true;

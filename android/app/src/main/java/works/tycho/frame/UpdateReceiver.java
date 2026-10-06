@@ -11,6 +11,6 @@ public class UpdateReceiver extends BroadcastReceiver {
    work.putExtra("session",intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID,-1));
   }else if(!Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()))return;
   context.startService(work);
-  if(Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()))context.startActivity(new Intent(context,FrameActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+  if(Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())){ScreenPowerController.resetSchedule(context);context.startActivity(new Intent(context,FrameActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
  }
 }

@@ -16,8 +16,8 @@ public class UpdateService extends Service {
  private int latestStart;
  private int pendingTasks;private boolean checking;
  private SharedPreferences state;
- private URL base;private String token;
- public void onCreate(){super.onCreate();state=getSharedPreferences("updates",MODE_PRIVATE);}
+ private URL base;private String token;private PowerManager.WakeLock cpu;
+ public void onCreate(){super.onCreate();state=getSharedPreferences("updates",MODE_PRIVATE);cpu=((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"frame:bounded-maintenance");cpu.acquire(120000);}
  public IBinder onBind(Intent intent){return null;}
  public int onStartCommand(Intent intent,int flags,int startId){
   latestStart=startId;
@@ -28,7 +28,7 @@ public class UpdateService extends Service {
   worker.execute(()->{try{run(request);}catch(Exception ignored){}finally{new Handler(getMainLooper()).post(()->{if(check)checking=false;if(--pendingTasks==0)stopSelf(latestStart);});}});
   return START_NOT_STICKY;
  }
- public void onDestroy(){worker.shutdown();super.onDestroy();}
+ public void onDestroy(){worker.shutdown();if(cpu!=null&&cpu.isHeld())cpu.release();super.onDestroy();}
  private void run(Intent request)throws Exception{
   SharedPreferences config=getSharedPreferences("FrameActivity",MODE_PRIVATE);
   token=config.getString("token",BuildConfig.TOKEN);
@@ -61,6 +61,7 @@ public class UpdateService extends Service {
    privateConfig.setRequestProperty("X-Frame-Config-Key",android.util.Base64.encodeToString(provisioningKey.getPublic().getEncoded(),android.util.Base64.NO_WRAP));
    try{if(privateConfig.getResponseCode()==200)DirectConfig.apply(getSharedPreferences("directConfig",MODE_PRIVATE),DirectConfig.decrypt(read(privateConfig.getInputStream(),32768),provisioningKey.getPrivate()));}finally{privateConfig.disconnect();}
   }catch(Exception ignored){} // Optional maintenance failure never blocks updates or offline playback.
+  VerificationController.runPending(this);
   HttpURLConnection manifest=connection(new URL(base,"app-update.json"));
   JSONObject value;
   try{

@@ -28,3 +28,9 @@ test('config is opt-in, authenticated, private and never served by filename',asy
   await chmod(join(dir,'direct-config.json'),0o644);expect((await handleRequest(request(),dir,'test')).status).toBe(503);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('verification accepts only explicit fixed one-shot tasks without parameters or commands',()=>{
+ const verification={version:1,id:'fixture-request',action:'alarm_probe'};
+ expect(validateDirectConfig({...config,verification}).verification).toEqual(verification);
+ for(const task of [{...verification,action:'shell'},{...verification,command:'anything'},{...verification,delaySeconds:9999},{...verification,id:'secret/url'},{...verification,version:2}])expect(()=>validateDirectConfig({...config,verification:task})).toThrow();
+});

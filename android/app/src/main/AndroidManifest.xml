@@ -2,6 +2,9 @@
  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
  <uses-feature android:name="android.hardware.faketouch" android:required="false" />
  <uses-permission android:name="android.permission.INTERNET" />
+ <uses-permission android:name="android.permission.WAKE_LOCK" />
+ <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+ <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
  <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
  <application android:label="My Photo Frame" android:icon="@drawable/frame_icon" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.NoActionBar">
@@ -21,6 +24,8 @@
    <intent-filter><action android:name="works.tycho.frame.CHECK_UPDATE" /></intent-filter>
   </receiver>
   <receiver android:name=".UpdateReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter></receiver>
+  <receiver android:name=".VerificationReceiver" android:exported="false"><intent-filter><action android:name="android.net.wifi.WIFI_STATE_CHANGED"/></intent-filter></receiver>
+  <receiver android:name=".ScreenPowerReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.TIME_SET"/><action android:name="android.intent.action.TIMEZONE_CHANGED"/></intent-filter></receiver>
   <service android:name=".UpdateService" android:exported="false" />
  </application>
 </manifest>
